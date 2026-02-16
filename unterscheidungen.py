@@ -12,14 +12,26 @@ st.write("Lade ein Bild hoch und erhalte eine Vorhersage mit Wahrscheinlichkeits
 # Modell laden (nur einmal)
 @st.cache_resource
 def load_model():
-    model = tf.keras.models.load_model("keras_model.h5", compile=False)
-    return model
+    try:
+        model = tf.keras.models.load_model("keras_model.h5", compile=False)
+        return model
+    except Exception as e:
+        st.error(f"Fehler beim Laden des Modells: {e}")
+        return None
 
 model = load_model()
 
 # Labels laden
-with open("labels.txt", "r") as f:
-    labels = [line.strip() for line in f.readlines()]
+def load_labels():
+    try:
+        with open("labels.txt", "r") as f:
+            labels = [line.strip() for line in f.readlines()]
+        return labels
+    except Exception as e:
+        st.error(f"Fehler beim Laden der Labels: {e}")
+        return []
+
+labels = load_labels()
 
 # Bild vorbereiten
 def preprocess_image(image):
@@ -38,32 +50,34 @@ if uploaded_file is not None:
 
     processed_image = preprocess_image(image)
 
-    prediction = model.predict(processed_image)
-    probabilities = prediction[0]
+    # Vorhersage mit Modell
+    if model:
+        prediction = model.predict(processed_image)
+        probabilities = prediction[0]
 
-    # Beste Klasse
-    index = np.argmax(probabilities)
-    confidence = probabilities[index]
+        # Beste Klasse
+        index = np.argmax(probabilities)
+        confidence = probabilities[index]
 
-    st.subheader("🔎 Ergebnis")
-    st.success(f"Vorhersage: **{labels[index]}**")
-    st.write(f"Sicherheit: **{confidence*100:.2f}%**")
+        st.subheader("🔎 Ergebnis")
+        st.success(f"Vorhersage: **{labels[index]}**")
+        st.write(f"Sicherheit: **{confidence * 100:.2f}%**")
 
-    # ---- Wahrscheinlichkeits-Balkendiagramm ----
-    st.subheader("📊 Wahrscheinlichkeiten aller Klassen")
+        # ---- Wahrscheinlichkeits-Balkendiagramm ----
+        st.subheader("📊 Wahrscheinlichkeiten aller Klassen")
 
-    fig, ax = plt.subplots()
+        # Wahrscheinlichkeiten und Labels sortieren
+        sorted_indices = np.argsort(probabilities)[::-1]
+        sorted_labels = [labels[i] for i in sorted_indices]
+        sorted_probabilities = probabilities[sorted_indices] * 100
 
-    colors = []
-    for i in range(len(labels)):
-        if i == index:
-            colors.append("green")  # Beste Klasse grün
-        else:
-            colors.append("gray")
+        fig, ax = plt.subplots()
 
-    ax.bar(labels, probabilities * 100, color=colors)
-    ax.set_ylim([0, 100])
-    ax.set_ylabel("Wahrscheinlichkeit (%)")
-    ax.set_title("Modell-Vorhersage")
+        colors = ["green" if i == 0 else "gray" for i in range(len(sorted_labels))]
 
-    st.pyplot(fig)
+        ax.bar(sorted_labels, sorted_probabilities, color=colors)
+        ax.set_ylim([0, 100])
+        ax.set_ylabel("Wahrscheinlichkeit (%)")
+        ax.set_title("Modell-Vorhersage")
+
+        st.pyplot(fig)
