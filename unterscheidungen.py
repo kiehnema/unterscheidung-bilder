@@ -15,7 +15,7 @@ def load_model():
     try:
         from keras.models import load_model  
 
-model = load_model('keras_model.h5', compile=False)  
+        model = load_model('keras_model.h5', compile=False)  
 
         return model
     except Exception as e:
