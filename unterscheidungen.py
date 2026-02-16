@@ -13,13 +13,17 @@ st.write("Lade ein Bild hoch und erhalte eine Vorhersage mit Wahrscheinlichkeits
 @st.cache_resource
 def load_model():
     try:
-        model = tf.keras.models.load_model("keras_model.h5", compile=False)
+        from keras.models import load_model  
+
+model = load_model('keras_model.h5', compile=False)  
+
         return model
     except Exception as e:
         st.error(f"Fehler beim Laden des Modells: {e}")
         return None
 
 model = load_model()
+
 
 # Labels laden
 def load_labels():
