@@ -24,8 +24,8 @@ model = load_model()
 # Labels laden
 def load_labels():
     try:
-        with open("labels.txt", "r") as f:
-            labels = [line.strip() for line in f.readlines()]
+        labels = ['Baum', 'Apfel', 'Ball'] 
+
         return labels
     except Exception as e:
         st.error(f"Fehler beim Laden der Labels: {e}")
