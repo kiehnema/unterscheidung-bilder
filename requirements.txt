@@ -1,6 +1,5 @@
-streamlit
-tensorflow
-numpy
-Pillow
-matplotlib
-keras
+streamlit==1.31.1
+tensorflow==2.15.0
+pillow==10.2.0
+numpy==1.26.4
+pandas==2.2.0
