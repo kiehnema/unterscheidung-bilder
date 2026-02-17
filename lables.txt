@@ -1,3 +1,0 @@
-0 baum
-1 ball
-2 apfel
