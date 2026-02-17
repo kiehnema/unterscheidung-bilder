@@ -22,7 +22,7 @@ st.write("Diese App unterscheidet zwischen **Apfel**, **Baum** und **Ball**.")
 # -----------------------------
 @st.cache_resource
 def load_keras_model():
-    return load_model("keras_Model.h5", compile=False)
+    return load_model("keras_model.h5", compile=False)
 
 model = load_keras_model()
 
