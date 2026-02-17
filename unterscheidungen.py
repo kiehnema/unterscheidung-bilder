@@ -1,15 +1,14 @@
 import streamlit as st
-from keras.models import load_model
+from tensorflow.keras.models import load_model
 from PIL import Image, ImageOps
 import numpy as np
 import pandas as pd
-import time
 
-# -----------------------------
-# Streamlit Konfiguration
-# -----------------------------
+# ----------------------------------
+# Streamlit Seitenkonfiguration
+# ----------------------------------
 st.set_page_config(
-    page_title="Bildklassifikation",
+    page_title="KI Bildklassifikation",
     page_icon="🤖",
     layout="centered"
 )
@@ -17,88 +16,90 @@ st.set_page_config(
 st.title("🍎🌳⚽ KI-Bildklassifikation")
 st.write("Diese App unterscheidet zwischen **Apfel**, **Baum** und **Ball**.")
 
-# -----------------------------
-# Modell laden (nur einmal)
-# -----------------------------
+# ----------------------------------
+# Modell laden (nur einmal laden!)
+# ----------------------------------
 @st.cache_resource
 def load_keras_model():
-    return load_model("keras_model.h5", compile=False)
+    model = load_model("keras_model.h5", compile=False)
+    return model
 
-model = load_keras_model()
+try:
+    model = load_keras_model()
+except Exception as e:
+    st.error("❌ Modell konnte nicht geladen werden.")
+    st.stop()
 
-# -----------------------------
+# ----------------------------------
 # Labels laden
-# -----------------------------
+# ----------------------------------
 def load_labels():
-    with open("labels.txt", "r") as f:
-        labels = f.readlines()
-    # Entfernt evtl. Nummern vor dem Klassennamen
-    labels = [label.strip().split(" ", 1)[-1] for label in labels]
-    return labels
+    try:
+        with open("labels.txt", "r") as f:
+            labels = f.readlines()
+        labels = [label.strip().split(" ", 1)[-1] for label in labels]
+        return labels
+    except:
+        st.error("❌ labels.txt konnte nicht geladen werden.")
+        st.stop()
 
 class_names = load_labels()
 
-# -----------------------------
-# Bild-Upload
-# -----------------------------
-uploaded_file = st.file_uploader("📤 Lade ein Bild hoch", type=["jpg", "jpeg", "png"])
+# ----------------------------------
+# Bild Upload
+# ----------------------------------
+uploaded_file = st.file_uploader(
+    "📤 Lade ein Bild hoch",
+    type=["jpg", "jpeg", "png"]
+)
 
 if uploaded_file is not None:
 
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="📷 Hochgeladenes Bild", use_container_width=True)
 
-    if st.button("🔍 Klassifizieren"):
+    # ----------------------------------
+    # Bild vorbereiten
+    # ----------------------------------
+    size = (224, 224)
+    image_resized = ImageOps.fit(image, size, Image.Resampling.LANCZOS)
+    image_array = np.asarray(image_resized)
 
-        # Ladeanimation
-        progress_bar = st.progress(0)
-        for percent in range(0, 101, 20):
-            time.sleep(0.1)
-            progress_bar.progress(percent)
+    normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1
 
-        # -----------------------------
-        # Bild vorbereiten
-        # -----------------------------
-        size = (224, 224)
-        image_resized = ImageOps.fit(image, size, Image.Resampling.LANCZOS)
-        image_array = np.asarray(image_resized)
+    data = np.ndarray((1, 224, 224, 3), dtype=np.float32)
+    data[0] = normalized_image_array
 
-        normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1
-
-        data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
-        data[0] = normalized_image_array
-
-        # -----------------------------
-        # Vorhersage
-        # -----------------------------
+    # ----------------------------------
+    # Vorhersage
+    # ----------------------------------
+    with st.spinner("🔍 Klassifiziere Bild..."):
         prediction = model.predict(data)
         prediction = prediction[0]
 
-        index = np.argmax(prediction)
-        best_class = class_names[index]
-        confidence_score = prediction[index]
+    index = np.argmax(prediction)
+    best_class = class_names[index]
+    confidence_score = float(prediction[index])
 
-        # -----------------------------
-        # Ergebnis anzeigen
-        # -----------------------------
-        st.subheader("🎯 Ergebnis")
-        st.success(f"**Vorhersage:** {best_class}")
-        st.write(f"**Sicherheit:** {confidence_score:.2%}")
+    # ----------------------------------
+    # Ergebnis anzeigen
+    # ----------------------------------
+    st.subheader("🎯 Ergebnis")
+    st.success(f"**Vorhersage:** {best_class}")
+    st.write(f"**Sicherheit:** {confidence_score:.2%}")
 
-        # -----------------------------
-        # Wahrscheinlichkeitsdiagramm
-        # -----------------------------
-        st.subheader("📊 Wahrscheinlichkeiten aller Klassen")
+    # ----------------------------------
+    # Wahrscheinlichkeitsdiagramm
+    # ----------------------------------
+    st.subheader("📊 Wahrscheinlichkeiten")
 
-        df = pd.DataFrame({
-            "Klasse": class_names,
-            "Wahrscheinlichkeit": prediction
-        })
+    df = pd.DataFrame({
+        "Klasse": class_names,
+        "Wahrscheinlichkeit": prediction
+    }).sort_values("Wahrscheinlichkeit", ascending=False)
 
-        df = df.sort_values("Wahrscheinlichkeit", ascending=False)
+    st.bar_chart(df.set_index("Klasse"))
 
-        st.bar_chart(df.set_index("Klasse"))
-
-        # Prozentanzeige unter dem Diagramm
-        for i, row in df.iterrows():
-            st.write(f"{row['Klasse']}: {row['Wahrscheinlichkeit']:.2%}")
+    # Detailanzeige
+    for _, row in df.iterrows():
+        st.write(f"{row['Klasse']}: {row['Wahrscheinlichkeit']:.2%}")
