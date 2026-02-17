@@ -1,87 +1,104 @@
 import streamlit as st
-import tensorflow as tf
+from keras.models import load_model
+from PIL import Image, ImageOps
 import numpy as np
-from PIL import Image
-import matplotlib.pyplot as plt
+import pandas as pd
+import time
 
-st.set_page_config(page_title="Bildklassifikation", layout="centered")
+# -----------------------------
+# Streamlit Konfiguration
+# -----------------------------
+st.set_page_config(
+    page_title="Bildklassifikation",
+    page_icon="🤖",
+    layout="centered"
+)
 
-st.title("🌳🍎⚽ Baum, Apfel oder Ball")
-st.write("Lade ein Bild hoch und erhalte eine Vorhersage mit Wahrscheinlichkeitsanzeige.")
+st.title("🍎🌳⚽ KI-Bildklassifikation")
+st.write("Diese App unterscheidet zwischen **Apfel**, **Baum** und **Ball**.")
 
+# -----------------------------
 # Modell laden (nur einmal)
+# -----------------------------
 @st.cache_resource
-def load_model():
-    try:
-        from keras.models import load_model  
+def load_keras_model():
+    return load_model("keras_Model.h5", compile=False)
 
-        model = load_model('keras_model.h5', compile=False)  
+model = load_keras_model()
 
-        return model
-    except Exception as e:
-        st.error(f"Fehler beim Laden des Modells: {e}")
-        return None
-
-model = load_model()
-
-
+# -----------------------------
 # Labels laden
+# -----------------------------
 def load_labels():
-    try:
-        labels = ['Baum', 'Apfel', 'Ball'] 
+    with open("labels.txt", "r") as f:
+        labels = f.readlines()
+    # Entfernt evtl. Nummern vor dem Klassennamen
+    labels = [label.strip().split(" ", 1)[-1] for label in labels]
+    return labels
 
-        return labels
-    except Exception as e:
-        st.error(f"Fehler beim Laden der Labels: {e}")
-        return []
+class_names = load_labels()
 
-labels = load_labels()
-
-# Bild vorbereiten
-def preprocess_image(image):
-    image = image.resize((224, 224))
-    image_array = np.array(image)
-    image_array = image_array.astype(np.float32) / 127.5 - 1
-    image_array = np.expand_dims(image_array, axis=0)
-    return image_array
-
-# Upload-Funktion
-uploaded_file = st.file_uploader("📤 Bild hochladen", type=["jpg", "jpeg", "png"])
+# -----------------------------
+# Bild-Upload
+# -----------------------------
+uploaded_file = st.file_uploader("📤 Lade ein Bild hoch", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
+
     image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, caption="Hochgeladenes Bild", use_column_width=True)
+    st.image(image, caption="📷 Hochgeladenes Bild", use_container_width=True)
 
-    processed_image = preprocess_image(image)
+    if st.button("🔍 Klassifizieren"):
 
-    # Vorhersage mit Modell
-    if model:
-        prediction = model.predict(processed_image)
-        probabilities = prediction[0]
+        # Ladeanimation
+        progress_bar = st.progress(0)
+        for percent in range(0, 101, 20):
+            time.sleep(0.1)
+            progress_bar.progress(percent)
 
-        # Beste Klasse
-        index = np.argmax(probabilities)
-        confidence = probabilities[index]
+        # -----------------------------
+        # Bild vorbereiten
+        # -----------------------------
+        size = (224, 224)
+        image_resized = ImageOps.fit(image, size, Image.Resampling.LANCZOS)
+        image_array = np.asarray(image_resized)
 
-        st.subheader("🔎 Ergebnis")
-        st.success(f"Vorhersage: **{labels[index]}**")
-        st.write(f"Sicherheit: **{confidence * 100:.2f}%**")
+        normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1
 
-        # ---- Wahrscheinlichkeits-Balkendiagramm ----
+        data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
+        data[0] = normalized_image_array
+
+        # -----------------------------
+        # Vorhersage
+        # -----------------------------
+        prediction = model.predict(data)
+        prediction = prediction[0]
+
+        index = np.argmax(prediction)
+        best_class = class_names[index]
+        confidence_score = prediction[index]
+
+        # -----------------------------
+        # Ergebnis anzeigen
+        # -----------------------------
+        st.subheader("🎯 Ergebnis")
+        st.success(f"**Vorhersage:** {best_class}")
+        st.write(f"**Sicherheit:** {confidence_score:.2%}")
+
+        # -----------------------------
+        # Wahrscheinlichkeitsdiagramm
+        # -----------------------------
         st.subheader("📊 Wahrscheinlichkeiten aller Klassen")
 
-        # Wahrscheinlichkeiten und Labels sortieren
-        sorted_indices = np.argsort(probabilities)[::-1]
-        sorted_labels = [labels[i] for i in sorted_indices]
-        sorted_probabilities = probabilities[sorted_indices] * 100
+        df = pd.DataFrame({
+            "Klasse": class_names,
+            "Wahrscheinlichkeit": prediction
+        })
 
-        fig, ax = plt.subplots()
+        df = df.sort_values("Wahrscheinlichkeit", ascending=False)
 
-        colors = ["green" if i == 0 else "gray" for i in range(len(sorted_labels))]
+        st.bar_chart(df.set_index("Klasse"))
 
-        ax.bar(sorted_labels, sorted_probabilities, color=colors)
-        ax.set_ylim([0, 100])
-        ax.set_ylabel("Wahrscheinlichkeit (%)")
-        ax.set_title("Modell-Vorhersage")
-
-        st.pyplot(fig)
+        # Prozentanzeige unter dem Diagramm
+        for i, row in df.iterrows():
+            st.write(f"{row['Klasse']}: {row['Wahrscheinlichkeit']:.2%}")
