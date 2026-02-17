@@ -54,53 +54,56 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file is not None:
+    try:
+        image = Image.open(uploaded_file).convert("RGB")
+        # Bild anzeigen mit fester Breite (600px) statt use_container_width
+        st.image(image, caption="📷 Hochgeladenes Bild", width=600)
 
-    image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, caption="📷 Hochgeladenes Bild", use_container_width=True)
+        # ----------------------------------
+        # Bild vorbereiten
+        # ----------------------------------
+        size = (224, 224)
+        image_resized = ImageOps.fit(image, size, Image.Resampling.LANCZOS)
+        image_array = np.asarray(image_resized)
 
+        normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1
 
-    # ----------------------------------
-    # Bild vorbereiten
-    # ----------------------------------
-    size = (224, 224)
-    image_resized = ImageOps.fit(image, size, Image.Resampling.LANCZOS)
-    image_array = np.asarray(image_resized)
+        data = np.ndarray((1, 224, 224, 3), dtype=np.float32)
+        data[0] = normalized_image_array
 
-    normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1
+        # ----------------------------------
+        # Vorhersage
+        # ----------------------------------
+        with st.spinner("🔍 Klassifiziere Bild..."):
+            prediction = model.predict(data)
+            prediction = prediction[0]
 
-    data = np.ndarray((1, 224, 224, 3), dtype=np.float32)
-    data[0] = normalized_image_array
+        index = np.argmax(prediction)
+        best_class = class_names[index]
+        confidence_score = float(prediction[index])
 
-    # ----------------------------------
-    # Vorhersage
-    # ----------------------------------
-    with st.spinner("🔍 Klassifiziere Bild..."):
-        prediction = model.predict(data)
-        prediction = prediction[0]
+        # ----------------------------------
+        # Ergebnis anzeigen
+        # ----------------------------------
+        st.subheader("🎯 Ergebnis")
+        st.success(f"**Vorhersage:** {best_class}")
+        st.write(f"**Sicherheit:** {confidence_score:.2%}")
 
-    index = np.argmax(prediction)
-    best_class = class_names[index]
-    confidence_score = float(prediction[index])
+        # ----------------------------------
+        # Wahrscheinlichkeitsdiagramm
+        # ----------------------------------
+        st.subheader("📊 Wahrscheinlichkeiten")
 
-    # ----------------------------------
-    # Ergebnis anzeigen
-    # ----------------------------------
-    st.subheader("🎯 Ergebnis")
-    st.success(f"**Vorhersage:** {best_class}")
-    st.write(f"**Sicherheit:** {confidence_score:.2%}")
+        df = pd.DataFrame({
+            "Klasse": class_names,
+            "Wahrscheinlichkeit": prediction
+        }).sort_values("Wahrscheinlichkeit", ascending=False)
 
-    # ----------------------------------
-    # Wahrscheinlichkeitsdiagramm
-    # ----------------------------------
-    st.subheader("📊 Wahrscheinlichkeiten")
+        st.bar_chart(df.set_index("Klasse"))
 
-    df = pd.DataFrame({
-        "Klasse": class_names,
-        "Wahrscheinlichkeit": prediction
-    }).sort_values("Wahrscheinlichkeit", ascending=False)
+        # Detailanzeige
+        for _, row in df.iterrows():
+            st.write(f"{row['Klasse']}: {row['Wahrscheinlichkeit']:.2%}")
 
-    st.bar_chart(df.set_index("Klasse"))
-
-    # Detailanzeige
-    for _, row in df.iterrows():
-        st.write(f"{row['Klasse']}: {row['Wahrscheinlichkeit']:.2%}")
+    except Exception as e:
+        st.error(f"❌ Fehler bei der Bildverarbeitung: {str(e)}")
